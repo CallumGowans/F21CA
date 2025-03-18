@@ -50,13 +50,14 @@ class ModelProvider:
                     messages.append({'role': 'user', 'content': chat_msg[0]})
                     messages.append({'role': 'assistant', 'content': chat_msg[1]})
 
-                messages.append({'role': 'user', 'content': user_prompt})
+                messages.append({'role': 'user', 'content': prompt})
+
 
                 data = {
                     "model": self.model_name,
                     "messages": messages,
                     "temperature": 0.7,
-                    "max_tokens": 500
+                    "max_tokens": 1500
                 }
 
                 response = requests.post(API_URL, headers=self.headers, json=data)
@@ -71,18 +72,32 @@ class ModelProvider:
 
                 if "choices" in result and len(result["choices"]) > 0:
                     response_text = result["choices"][0]["message"]["content"]
-                    # print("\nThe content returned by the API:\n", response_text)
+                    try:
+                        json_start = response_text.find("{")
+                        json_end = response_text.rfind("}") + 1
 
-                    # 过滤非 JSON 部分（如果 AI 返回多余内容）
-                    json_start = response_text.find("{")
-                    json_end = response_text.rfind("}") + 1
-                    json_str = response_text[json_start:json_end]
+                        if json_start == -1 or json_end == -1:
+                            return {
+                                "action": {
+                                    "action_name": "finish",
+                                    "action_args": {"answer": response_text.strip()}
+                                }
+                            }
 
-                    content = json.loads(json_str)
-                    result = extract_json_from_content(content).get("prompt")
-                    print("\033[36mModel result: ", result, "\033[0m")
+                        json_str = response_text[json_start:json_end]
+                        content = json.loads(json_str)
+                        result = extract_json_from_content(content).get("prompt")
+                        return result
 
-                    return result
+                    except json.JSONDecodeError:
+                        # Fallback for broken JSON
+                        return {
+                            "action": {
+                                "action_name": "finish",
+                                "action_args": {"answer": response_text.strip()}
+                            }
+                        }
+
                 else:
                     print("\nThe data returned by the API does not contain the expected content")
                     return {}
