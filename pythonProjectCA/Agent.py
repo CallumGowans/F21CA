@@ -10,8 +10,13 @@ class MovieAgent:
         self.chat_history = []
         self.agent_scratch = ''
         self.mp = model2.ModelProvider()
-        self.speech_key = "YOUR_SPEECH_KEY"
-        self.service_region = "YOUR_REGION"
+        self.speech_key = "N2lCM4E8tLjJAzdnkJWOAkHGzDZQrCro1UzcwVChmJvVs7Wi3r7yJQQJ99BCAClhwhEXJ3w3AAAYACOGsDIF"
+        self.service_region = "ukwest"
+
+
+    def agent_reset(self):
+        self.chat_history.clear()
+        self.agent_scratch = ''
 
     def recognize_speech(self):
         speech_config = speechsdk.SpeechConfig(subscription=self.speech_key, region=self.service_region)
@@ -33,18 +38,39 @@ class MovieAgent:
 
     def agent_execute(self, query, max_turns=5):
         self.chat_history.append({"role": "user", "content": query})
+        iteration = 1
 
         for turn in range(max_turns):
+            print("iteration: ", iteration)
+            iteration += 1
             full_conversation = "\n".join(
                 [f"{msg['role'].capitalize()}: {msg['content']}" for msg in self.chat_history]
             )
 
             prompt = gen_prompt(full_conversation, self.agent_scratch)
-            response = self.mp.chat(prompt, [])
+            retry_attempts = 3
+            wait_time = 5
+
+            for attempt in range(retry_attempts):
+                try:
+                    response = self.mp.chat(prompt, [])
+                    break
+                except Exception as e:
+                    if "429" in str(e):
+                        print(f"Rate limit hit (attempt {attempt + 1}/{retry_attempts}). Waiting {wait_time} seconds...")
+                        time.sleep(wait_time)
+                        wait_time *= 2
+                        if attempt == retry_attempts - 1:
+                            return "Sorry, I’ve hit a rate limit with the API. Please try again later!"
+                    else:
+                        return f"Error: {str(e)}"
+
+            time.sleep(1)  # Prevent rapid calls
 
             if not response or not isinstance(response, dict):
                 return "Sorry, I encountered an issue. Please try again."
 
+            print("Model response: ", response)
             action_info = response.get("action")
             action_name = action_info.get("action_name")
             action_args = action_info.get("action_args")
@@ -58,28 +84,67 @@ class MovieAgent:
                 reply = "I'm your movie recommendation assistant! Let's stick to movie topics."
                 self.chat_history.append({"role": "assistant", "content": reply})
                 return reply
+            elif action_name == "None":
+                # Get the assistant's actual response from the model
+                final_answer = response.get("choices", [{}])[0].get("message", {}).get("content", "Hello! How can I help with your movie search?")
+                self.chat_history.append({"role": "assistant", "content": final_answer})
+                return final_answer
 
             elif action_name == "get_movie_data_from_database":
                 query_json = json.loads(action_args.get('query', '{}'))
                 movies_data = tools_map["get_movie_data_from_database"](query_json)
 
+            
                 if not movies_data:
                     reply = "I couldn't find movies matching your preferences. Could you specify differently?"
                     self.chat_history.append({"role": "assistant", "content": reply})
                     return reply
 
-                # Save fetched movies explicitly
-                self.agent_scratch = json.dumps({"Movie_datas": movies_data,
-                                                 "movie_count": len(movies_data)})
+                self.agent_scratch = json.dumps({"Movie_datas": movies_data, "movie_count": len(movies_data)})
+                movie_count = len(movies_data)
 
-                # Continue immediately to get a recommendation based on fetched movies
-                query = ("You've retrieved the requested movie data. "
+                if movie_count > 2:
+                    system_query = (
+                        f"I found {movie_count} movies matching your request. "
+                        "Please generate a natural, conversational follow-up question to narrow it down, "
+                        "based on the current chat history and movie data in 'agent_scratch'. "
+                        "Ask about details like genre, actors, directors, years, or themes, but make it engaging! "
+                        "Return the question in the 'answer' field with action_name 'continue'."
+                    )
+                    self.chat_history.append({"role": "system", "content": system_query})
+                    # Immediately make a second API call to get the question
+                    full_conversation = "\n".join(
+                        [f"{msg['role'].capitalize()}: {msg['content']}" for msg in self.chat_history]
+                    )
+                    prompt = gen_prompt(full_conversation, self.agent_scratch)
+                    for attempt in range(retry_attempts):
+                        response = self.mp.chat(prompt, [])
+                        break
+                    
+                    reply = response.get("action", {}).get("action_args", {}).get("answer", "Hmm, can you give me more to work with—like a genre or actor?")
+                    self.chat_history.append({"role": "assistant", "content": reply})
+                    return reply
+
+                else:
+                    query = (
+                        "You’ve retrieved the requested movie data. "
                         "Based on 'Movie_datas', provide a conversational, engaging movie recommendation. "
-                        "Avoid robotic language, keep it natural.")
-                self.chat_history.append({"role": "user", "content": query})
+                        "Avoid robotic language, keep it natural."
+                    )
+                    self.chat_history.append({"role": "user", "content": query})
+                    prompt = gen_prompt("\n".join([f"{msg['role'].capitalize()}: {msg['content']}" for msg in self.chat_history]), self.agent_scratch)
+                    response = self.mp.chat(prompt, [])
+                    final_answer = response.get("action", {}).get("action_args", {}).get("answer", "Here’s a suggestion...")
+                    self.chat_history.append({"role": "assistant", "content": final_answer})
+                    return final_answer
+
+            elif action_name == "continue":
+                reply = action_args.get("answer", "Hmm, let’s try that again—what kind of movie are you feeling?")
+                self.chat_history.append({"role": "assistant", "content": reply})
+                return reply
 
             else:
-                reply = "I'm not sure I understood. Could you clarify what movie you'd like?"
+                reply = "I’m not sure I understood. Could you clarify what movie you’d like?"
                 self.chat_history.append({"role": "assistant", "content": reply})
                 return reply
 
