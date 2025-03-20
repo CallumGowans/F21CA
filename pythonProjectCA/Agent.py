@@ -69,7 +69,8 @@ class MovieAgent:
                     return reply
 
                 # Save fetched movies explicitly
-                self.agent_scratch = json.dumps({"Movie_datas": movies_data})
+                self.agent_scratch = json.dumps({"Movie_datas": movies_data,
+                                                 "movie_count": len(movies_data)})
 
                 # Continue immediately to get a recommendation based on fetched movies
                 query = ("You've retrieved the requested movie data. "
