@@ -1,7 +1,7 @@
 import tkinter as tk
 from PIL import Image, ImageTk
 from Agent import MovieAgent
-import traceback
+import time
 
 class GUI:
     def __init__(self):
@@ -10,16 +10,16 @@ class GUI:
         print("Debug - Tk root created")
         self.root.geometry("500x500")
         self.root.title("Movie Recommender")
-        
-        self.muted = True
+        self.voice_response = ""
+        self.muted = False
 
         self.open_mic_image = Image.open("images/microphone.png")
         self.open_mic_image.thumbnail((40, 40))
         self.open_mic_image_tk = ImageTk.PhotoImage(self.open_mic_image)
-        self.closed_mic_image = Image.open("images/mute.png")
+        self.closed_mic_image = Image.open("images/mic_open.png")
         self.closed_mic_image.thumbnail((40, 40))
         self.closed_mic_image_tk = ImageTk.PhotoImage(self.closed_mic_image)
-
+        
         self.label = tk.Label(self.root, text="Please input your query", font=('Arial', 18))
         self.label.pack(padx=20, pady=20)
         print("Debug - Label packed")
@@ -33,7 +33,7 @@ class GUI:
         self.buttonframe.columnconfigure(1, weight=1)
         self.buttonframe.columnconfigure(2, weight=1)
 
-        self.submit_btn = tk.Button(self.buttonframe, text="Submit", font=('Arial', 14), command=self.text_request)
+        self.submit_btn = tk.Button(self.buttonframe, text="Submit", font=('Arial', 14), command=self.text_request, )
         self.submit_btn.grid(row=0, column=0, padx=10, pady=10)
 
         self.voice_btn = tk.Button(self.buttonframe, image=self.open_mic_image_tk, font=('Arial', 14), command=self.toggle_voice_control)
@@ -71,6 +71,7 @@ class GUI:
 
     def show_response(self, message):
         response = self.movie_agent.agent_execute(message)
+        self.voice_response = response
         self.text_display.config(state='normal')
         self.text_display.insert(tk.END, f"Response: {response}\n", "response")
         self.text_display.config(state='disabled')
@@ -81,32 +82,33 @@ class GUI:
         self.text_display.config(state='normal')
         self.text_display.delete("1.0", tk.END)
         self.text_display.config(state='disabled')
+        self.movie_agent.agent_reset()
         self.root.update()
 
     def toggle_voice_control(self):
         if self.muted:
             self.voice_btn.config(image=self.open_mic_image_tk)
-            print("Microphone Muted - Stopped Listening")
             self.submit_btn.config(state='normal')
             self.textbox.config(state='normal')
             self.muted = False
         else:
             self.voice_btn.config(image=self.closed_mic_image_tk)
-            print("Microphone Unmuted - Listening...")
             self.submit_btn.config(state='disabled')
             self.textbox.config(state='disabled')
             self.muted = True
             self.listen_and_display()
 
     def listen_and_display(self):
-     
-        user_input = agent.recognize_speech()
-        self.send_message(user_input)
-        self.show_response(user_input)
-
+        user_input = self.movie_agent.recognize_speech()
         if user_input:
             self.send_message(user_input)
-            
+            self.show_response(user_input)
+        else:
+            self.send_message("Sorry, I couldn’t hear you. Please try again.")
+        
+        self.movie_agent.synthesize_speech(self.voice_response)
+        self.toggle_voice_control()
+                
 
     def text_request(self):
         user_input = self.textbox.get("1.0", "end").strip()
