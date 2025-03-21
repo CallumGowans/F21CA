@@ -43,6 +43,7 @@ class ModelProvider:
         self.model_name = "deepseek-ai/DeepSeek-V3"
 
     def chat(self, prompt, chat_history):
+        print("DeepSeek model responding...")
         for i in range(self.max_retry_time):
             try:
                 messages = [{'role': 'system', 'content': prompt}]

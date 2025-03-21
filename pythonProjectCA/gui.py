@@ -13,6 +13,28 @@ class GUI:
         self.voice_response = ""
         self.muted = False
 
+        self.llmframe = tk.Frame(self.root)
+        self.llmframe.columnconfigure(0, weight =1)
+        self.llmframe.columnconfigure(1, weight =1)
+        self.llm_choice = tk.IntVar(value=1)  # 1 for DeepSeek, 2 for QWen
+
+        
+
+        self.deepseek_radio = tk.Radiobutton(self.llmframe, text="DeepSeek", variable=self.llm_choice, value=1, command=self.switch_llm)
+        self.qwen_radio = tk.Radiobutton(self.llmframe, text="QWen", variable=self.llm_choice, value=2, command=self.switch_llm)
+
+        self.deepseek_radio.grid(row=0, column=0)
+        self.qwen_radio.grid(row=0, column=1)
+
+
+        self.llm_label = tk.Label(self.llmframe, text="Currently using: DeepSeek", font=('Arial', 12))
+        self.llm_label.grid(row=1, column=0, columnspan=2)
+
+
+        self.llmframe.pack(pady=5, fill="x")
+        print("Debug - LLM Options frame packed")
+
+
         self.open_mic_image = Image.open("images/microphone.png")
         self.open_mic_image.thumbnail((40, 40))
         self.open_mic_image_tk = ImageTk.PhotoImage(self.open_mic_image)
@@ -57,9 +79,17 @@ class GUI:
         print("Debug - Starting mainloop")
         self.root.mainloop()
 
-    def show_response(self, message):
-        response = self.movie_agent.agent_execute(message)
-        self.text_display.insert(tk.END, f"Response: {response}\n", "response")
+    def switch_llm(self):
+        choice = self.llm_choice.get()
+        if choice == 1:
+            self.movie_agent.set_llm("deepseek")
+            self.llm_label.config(text="Currently using: DeepSeek")
+
+
+        elif choice == 2:
+            self.movie_agent.set_llm("qwen")
+            self.llm_label.config(text="Currently using: QWen")
+       
 
     def send_message(self, message):
         print(f"Debug - Message to display: '{message}'")
@@ -73,7 +103,12 @@ class GUI:
         response = self.movie_agent.agent_execute(message)
         self.voice_response = response
         self.text_display.config(state='normal')
-        self.text_display.insert(tk.END, f"Response: {response}\n", "response")
+        llm_value = self.llm_choice.get()
+
+        if llm_value == 1:
+            self.text_display.insert(tk.END, f"Response (Deepseek): {response}\n", "response")
+        if llm_value == 2:
+            self.text_display.insert(tk.END, f"Response (QWen): {response}\n", "response")
         self.text_display.config(state='disabled')
         self.root.update()
 

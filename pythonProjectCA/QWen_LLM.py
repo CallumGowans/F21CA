@@ -84,13 +84,14 @@ class ModelProvider():
         self.max_retry_time = 3
 
     def chat(self, prompt, chat_history):
+        print("QWen model responding...")
+
         for i in range(self.max_retry_time):
             try:
                 messages = [{'role': 'system', 'content': prompt}]
                 for chat_msg in chat_history:
                     messages.append({'role': 'user', 'content': chat_msg[0]})
                     messages.append({'role': 'assistant', 'content': chat_msg[1]})
-                messages.append({'role': 'user', 'content': user_prompt})
                 response = self.client.chat.completions.create(
                     model="qwen-plus",
                     messages=messages,
@@ -136,7 +137,15 @@ class ModelProvider():
                     print("\033[36mModel result: ", result, "\033[0m")
                     return result
                 except Exception:
-                    return content
+                    print("Failed to extract structured response. Wrapping plain text as fallback.")
+                    return {
+                        "action": {
+                            "action_name": "chat",
+                            "action_args": {
+                                "answer": content.strip() if isinstance(content, str) else "Hello! I’m your movie assistant."
+                            }
+                        }
+                    }
 
             except Exception as e:
                 print(f"LLM call Failed: {e}")
