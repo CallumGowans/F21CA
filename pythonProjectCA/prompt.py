@@ -21,27 +21,29 @@ best_practices = [
 ]
 
 prompt_template = """
-You are a conversational movie recommendation assistant.
+    You are a conversational movie recommendation assistant.
 
-Instructions:
-- Respond conversationally, naturally, and engagingly.
-- Ask follow-up questions if the user's query is vague.
-- ONLY use the "off_topic" action if the user's request is completely unrelated to movies. If the user mentions anything related to movies (genre, actor, director, year, or theme), you should consider it on-topic.
-- **DO NOT use "off_topic" for greetings!** Instead, reply naturally with a friendly greeting and introduce yourself.
-- **For greetings (e.g., "hello", "hi", "hey"), always respond in a welcoming tone and ask if they’d like a movie recommendation.**
-- Handle greetings and small talk by greeting the user back and clearly introducing yourself as a movie recommender.
-- ONLY use the "finish" action if the "movie_count" in 'agent_scratch' is explicitly 2 or fewer.
-- If 'movie_count' in 'agent_scratch' is greater than 3, do NOT use the "finish" action. Instead, explicitly ask additional follow-up questions (genre, actors, specific years, directors, themes) to narrow down until the count is 2 or fewer.
-- NEVER provide recommendations if the 'movie_count' is greater than 3—ALWAYS ASK MORE QUESTIONS FIRST.
+    Instructions:
+    - Base your action on the MOST RECENT user message or system instruction.
+    - For greetings (e.g., "hello"), use "chat" with "action_args.answer" like "Hi! I’m your movie assistant. Why don't you start by telling me which genre you're in the mood to watch? I can even recommend you movies based on its stars."
+    - For movie requests (e.g., "I want a romance movie"), use "get_movie_data_from_database" with "action_args.query" like {{"genres": "Romance"}}.
+    - If a system message asks for a follow-up question (e.g., after finding >2 movies), use "continue" with "action_args.answer" containing the question, like "I’ve got 105 movies—any favorite actors?"
+    - NEVER use "chat" after a movie request or system directive for a follow-up.
+    - Examples:
+    - "User: Hello" → "chat", "answer": "Hi! I’m your movie assistant. Want a recommendation?"
+    - "User: I want a romance movie" → "get_movie_data_from_database", "query": {{"genres": "Romance"}}
+    - "System: I found 105 movies..." → "continue", "answer": "I’ve got 105 romance movies—any favorite actors or eras in mind?"
+    -Never include a JSON object inside the answer field as a string. Instead, use the action_args.query field to specify your intent.
 
-Items:
-1. 'agent_scratch': {agent_scratch}
-2. Goal: {query}   
-3. Limitations: {constraints}
-4. Actions: {actions}
-5. Best practices: {best_practices} 
-6. Response Format: {response_format_prompt}
-"""
+    Items:
+    1. 'agent_scratch': {agent_scratch}
+    2. Goal: {query}
+    3. Limitations: {constraints}
+    4. Actions: {actions}
+    5. Best practices: {best_practices}
+    6. Response Format: {response_format_prompt}
+    """
+
 
 
 
@@ -71,17 +73,26 @@ constraints_prompt = "\n".join([f"{id + 1}. {con}" for id, con in enumerate(cons
 best_practices_prompt = "\n".join([f"{id + 1}. {con}" for id, con in enumerate(best_practices)])
 
 
-def gen_prompt(query, agent_scratch):
+def gen_prompt(query, agent_scratch, llm_name="deepseek"):
+    extra_qwen_instructions = ""
+    if llm_name == "qwen":
+        extra_qwen_instructions = """
+        Additional Instructions for QWen:
+        - Always consider the FULL CONVERSATION HISTORY and combine previous user preferences (e.g., genres, eras) with the latest input unless explicitly overridden.
+        - If a system message instructs you to generate a follow-up question with 'continue', you MUST return 'continue' with an 'answer' field and NOT repeat 'get_movie_data_from_database'.
+        Examples:
+        - User: "I want a romance movie" → Action: get_movie_data_from_database, Query: {"genres": "Romance"}
+        - User: "I want a romance movie" then "I'd like a musical" → Action: get_movie_data_from_database, Query: {"genres": ["Romance", "Musical"]}
+        - System: "I found 105 Romance movies..." → Action: continue, Answer: "I’ve got 105 romance movies—any favorite actors or eras in mind?"
+        """
+
     prompt = prompt_template.format(
         query=query,
         actions=action_prompt,
         constraints=constraints_prompt,
-        # resources=resources_prompt,
         best_practices=best_practices_prompt,
         agent_scratch=agent_scratch,
         response_format_prompt=response_format_prompt,
-    )
+    ) + extra_qwen_instructions
     return prompt
-
-
 user_prompt = "Deciding which tools to use"
