@@ -3,7 +3,7 @@ import json
 import os
 from prompt import user_prompt
 from dotenv import load_dotenv
-from QWen_LLM import  extract_json_from_content
+from ChatGPT_LLM import  extract_json_from_content
 
 def parse_json(json_str):
     """

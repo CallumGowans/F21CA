@@ -21,10 +21,10 @@ class GUI:
         
 
         self.deepseek_radio = tk.Radiobutton(self.llmframe, text="DeepSeek", variable=self.llm_choice, value=1, command=self.switch_llm)
-        self.qwen_radio = tk.Radiobutton(self.llmframe, text="QWen", variable=self.llm_choice, value=2, command=self.switch_llm)
+        self.chatgpt_radio = tk.Radiobutton(self.llmframe, text="ChatGPT", variable=self.llm_choice, value=2, command=self.switch_llm)
 
         self.deepseek_radio.grid(row=0, column=0)
-        self.qwen_radio.grid(row=0, column=1)
+        self.chatgpt_radio.grid(row=0, column=1)
 
 
         self.llm_label = tk.Label(self.llmframe, text="Currently using: DeepSeek", font=('Arial', 12))
@@ -67,7 +67,7 @@ class GUI:
         self.buttonframe.pack(pady=5, fill="x")
         print("Debug - Button frame packed")
 
-        self.text_display = tk.Text(self.root, font=('Arial', 14), height=10, state='disabled')
+        self.text_display = tk.Text(self.root, font=('Arial', 14), height=10, state='disabled', wrap="word")
         self.text_display.pack(padx=20, pady=5, fill="both", expand=True)
         print("Debug - Text display packed")
 
@@ -76,8 +76,14 @@ class GUI:
 
         self.movie_agent = MovieAgent()
 
-        print("Debug - Starting mainloop")
+        self.text_display.config(state='normal')
+        self.text_display.insert(tk.END, "Response: Hello! I'm your movie recommendation assistant! What are you in the mood to watch?\n", "response")
+        self.text_display.config(state='disabled')
+
+
+
         self.root.mainloop()
+
 
     def switch_llm(self):
         choice = self.llm_choice.get()
@@ -87,8 +93,8 @@ class GUI:
 
 
         elif choice == 2:
-            self.movie_agent.set_llm("qwen")
-            self.llm_label.config(text="Currently using: QWen")
+            self.movie_agent.set_llm("chatgpt")
+            self.llm_label.config(text="Currently using: ChatGPT")
        
 
     def send_message(self, message):
@@ -108,7 +114,7 @@ class GUI:
         if llm_value == 1:
             self.text_display.insert(tk.END, f"Response (Deepseek): {response}\n", "response")
         if llm_value == 2:
-            self.text_display.insert(tk.END, f"Response (QWen): {response}\n", "response")
+            self.text_display.insert(tk.END, f"Response (ChatGPT): {response}\n", "response")
         self.text_display.config(state='disabled')
         self.root.update()
 
@@ -119,6 +125,9 @@ class GUI:
         self.text_display.config(state='disabled')
         self.movie_agent.agent_reset()
         self.root.update()
+        self.text_display.config(state='normal')
+        self.text_display.insert(tk.END, "Response: Hello! I'm your movie recommendation assistant! What are you in the mood to watch?\n", "response")
+        self.text_display.config(state='disabled')
 
     def toggle_voice_control(self):
         if self.muted:
@@ -153,3 +162,4 @@ class GUI:
 
 if __name__ == "__main__":
     GUI()
+    

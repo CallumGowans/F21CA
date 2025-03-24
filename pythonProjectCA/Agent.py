@@ -3,16 +3,17 @@ import time
 from tools import tools_map
 from prompt import gen_prompt
 import DeepSeek_LLM as model2
-import QWen_LLM as model1
+import ChatGPT_LLM as model1
 import azure.cognitiveservices.speech as speechsdk
 
 class MovieAgent:
     def __init__(self):
         self.chat_history = []
         self.agent_scratch = ''
-        self.use_qwen = False 
-        self.model_qwen = model1.ModelProvider()
+        self.model_chatgpt = model1.ModelProvider()
         self.model_deepseek = model2.ModelProvider()
+        self.current_llm = "deepseek"
+        self.mp = self.model_deepseek
         self.mp = self.model_deepseek
         self.speech_key = "N2lCM4E8tLjJAzdnkJWOAkHGzDZQrCro1UzcwVChmJvVs7Wi3r7yJQQJ99BCAClhwhEXJ3w3AAAYACOGsDIF"
         self.service_region = "ukwest"
@@ -26,10 +27,12 @@ class MovieAgent:
     def set_llm(self, llm_name):
         if llm_name == "deepseek":
             self.mp = self.model_deepseek
+            self.current_llm = "deepseek"
             print("Using Deepseek as LLM")
-        elif llm_name == "qwen":
-            self.mp = self.model_qwen
-            print("Using QWen as LLM")
+        elif llm_name == "chatgpt":
+            self.mp = self.model_chatgpt
+            self.current_llm = "chatgpt"
+            print("Using ChatGPT as LLM")
 
     def recognize_speech(self):
         speech_config = speechsdk.SpeechConfig(subscription=self.speech_key, region=self.service_region)
@@ -51,7 +54,7 @@ class MovieAgent:
 
     def agent_execute(self, query, max_turns=5):
         self.chat_history.append({"role": "user", "content": query})
-        llm_name = "qwen" if self.mp == self.model_qwen else "deepseek"
+        llm_name = self.current_llm  # 直接使用标志变量
         retry_attempts = 3
         wait_time = 5
 
@@ -222,7 +225,15 @@ class MovieAgent:
                     self.chat_history.append({"role": "assistant", "content": reply})
                     return reply
                 
-                self.agent_scratch = json.dumps({"Movie_datas": movies_data, "movie_count": len(movies_data)})
+                print("SCRACH:", len(movies_data))
+
+                self.agent_scratch = json.dumps({
+                "Movie_datas": movies_data[:2] if len(movies_data) > 2 else movies_data,
+                "movie_count": len(movies_data),
+                "Genres_searched": genres
+})
+
+                
                 movie_count = len(movies_data)
                 print("Number of movies found is:", movie_count)
                 # ... rest of the block remains unchanged ...
@@ -233,16 +244,16 @@ class MovieAgent:
                 if movie_count > 2:
                     system_query = (
                         f"I found {movie_count} {query_json.get('genres', '')} movies. "
-                        "Generate a warm, natural follow-up question to refine the list based on the user's input. "
-                        "For example: 'I found 105 romance movies—wow, that’s a lot! Let’s narrow it down. "
-                        "Would you like a comedy romance, a musical, or something else?' "
-                        "You MUST return 'continue' with a follow-up question here—do not repeat 'get_movie_data_from_database' since the data is already fetched. "
-                        "Return a JSON object with 'action_name': 'continue' and 'answer': '<your question>'. "
-                        "Example: {'action_name': 'continue', 'answer': 'I found 5 action movies—do you want fast-paced or suspenseful?'}"
+                        "You MUST now suggest the 2 movies in 'Movie_datas', including title, year, and a short sentence or two about each one. Keep tokens to a minimum"
+                        "Then, ask a warm and relevant follow-up question to refine the user's preferences (e.g., 'Do you like your action more sci-fi or crime-heavy?'). "
+                        "You MUST return a JSON object like this: "
+                        "{'action_name': 'continue', 'answer': '<your full message>'}. "
+                        "Do not repeat 'get_movie_data_from_database'."
                     )
+
                     self.chat_history.append({"role": "system", "content": system_query})
                     full_conversation = "\n".join([f"{msg['role'].capitalize()}: {msg['content']}" for msg in self.chat_history])
-                    scratch_summary = f"movie_count: {movie_count}, genres: {query_json.get('genres', '')}"
+                    scratch_summary = scratch_summary = self.agent_scratch
                     prompt = f"Latest User Input: {query}\n\n" + gen_prompt(full_conversation, scratch_summary, llm_name)
                     print("Prompt sent to LLM: ", prompt)
 
@@ -294,7 +305,7 @@ class MovieAgent:
                     action_name = action_data.get("action_name")
                     reply = action_data.get("action_args", {}).get("answer")
                     print(f"Debug: action_name={action_name}, reply={reply}")
-                    if action_name == "continue" and reply:
+                    if action_name in ("continue","finish") and reply:
                         self.chat_history.append({"role": "assistant", "content": reply})
                         print("Debug: Returning reply: ", reply)
                         return reply

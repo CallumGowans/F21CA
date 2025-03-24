@@ -27,12 +27,17 @@ prompt_template = """
     - Base your action on the MOST RECENT user message or system instruction.
     - For greetings (e.g., "hello"), use "chat" with "action_args.answer" like "Hi! I’m your movie assistant. Why don't you start by telling me which genre you're in the mood to watch? I can even recommend you movies based on its stars."
     - For movie requests (e.g., "I want a romance movie"), use "get_movie_data_from_database" with "action_args.query" like {{"genres": "Romance"}}.
+    - When 'Movie_datas' only has 2 movies and 'movie_count' is high, you MUST suggest the 2 movies and ask a follow-up question to narrow down results.
+    - Use 'Genres_searched' to see what genres have already been considered, and ask a new question that adds filters or preferences (e.g., style, actor, era).
+    - Avoid repeating genres in 'Genres_searched'. Focus on deepening the user's intent (e.g., from Romance to Romantic Comedy or Period Romance).
     - If a system message asks for a follow-up question (e.g., after finding >2 movies), use "continue" with "action_args.answer" containing the question, like "I’ve got 105 movies—any favorite actors?"
+    - “If user input refines an earlier genre (e.g., adds ‘comedy’ to ‘romance’), requery the database with updated genres and do not repeat earlier results.”
     - NEVER use "chat" after a movie request or system directive for a follow-up.
+    - NEVER suggest a movie title that isn't in the 'agent_scratch'
     - Examples:
-    - "User: Hello" → "chat", "answer": "Hi! I’m your movie assistant. Want a recommendation?"
-    - "User: I want a romance movie" → "get_movie_data_from_database", "query": {{"genres": "Romance"}}
-    - "System: I found 105 movies..." → "continue", "answer": "I’ve got 105 romance movies—any favorite actors or eras in mind?"
+    - "User: Hello" -> "chat", "answer": "Hi! I’m your movie assistant. Want a recommendation?"
+    - "User: I want a romance movie" -> "get_movie_data_from_database", "query": {{"genres": "Romance"}}
+    - "System: I found 105 movies..." -> "continue", "answer": "I’ve got 105 romance movies—any favorite actors or eras in mind?"
     -Never include a JSON object inside the answer field as a string. Instead, use the action_args.query field to specify your intent.
 
     Items:
@@ -45,11 +50,9 @@ prompt_template = """
     """
 
 
-
-
 response_format_prompt = """
 {
-    prompt = {
+    "prompt" = {
             "action": {
                 "action_name": "name1",
                 "action_args": {
@@ -74,17 +77,6 @@ best_practices_prompt = "\n".join([f"{id + 1}. {con}" for id, con in enumerate(b
 
 
 def gen_prompt(query, agent_scratch, llm_name="deepseek"):
-    extra_qwen_instructions = ""
-    if llm_name == "qwen":
-        extra_qwen_instructions = """
-        Additional Instructions for QWen:
-        - Always consider the FULL CONVERSATION HISTORY and combine previous user preferences (e.g., genres, eras) with the latest input unless explicitly overridden.
-        - If a system message instructs you to generate a follow-up question with 'continue', you MUST return 'continue' with an 'answer' field and NOT repeat 'get_movie_data_from_database'.
-        Examples:
-        - User: "I want a romance movie" → Action: get_movie_data_from_database, Query: {"genres": "Romance"}
-        - User: "I want a romance movie" then "I'd like a musical" → Action: get_movie_data_from_database, Query: {"genres": ["Romance", "Musical"]}
-        - System: "I found 105 Romance movies..." → Action: continue, Answer: "I’ve got 105 romance movies—any favorite actors or eras in mind?"
-        """
 
     prompt = prompt_template.format(
         query=query,
@@ -93,6 +85,6 @@ def gen_prompt(query, agent_scratch, llm_name="deepseek"):
         best_practices=best_practices_prompt,
         agent_scratch=agent_scratch,
         response_format_prompt=response_format_prompt,
-    ) + extra_qwen_instructions
+    )
     return prompt
 user_prompt = "Deciding which tools to use"
